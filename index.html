@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ミッシング立ち位置練習</title>
+<style>
+  /* 配色は既存のSTドリルと同じ紫系。ダークモードはOS設定に追従 */
+  :root{
+    --bg:#f2eff6; --paper:#fff; --ink:#1d1730; --soft:#544c6b; --faint:#837a99;
+    --line:rgba(45,30,80,.16); --violet:#61419e; --violet-soft:rgba(97,65,158,.10);
+    --gold:#b07d12; --arena:#e9e4f1; --ring:#c0392b; --tower:#3f6fb0;
+    --tank:#3f6fb0; --healer:#26714f; --dps:#a93b35;
+    --ok:#1f7a4d; --ok-soft:rgba(31,122,77,.14); --ng:#b0323a; --ng-soft:rgba(176,50,58,.12);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#141021; --paper:#1e182e; --ink:#ece7f7; --soft:#b3a9c9; --faint:#8a7fa3;
+      --line:rgba(216,201,255,.22); --violet:#b197e8; --violet-soft:rgba(177,151,232,.14);
+      --gold:#e5b455; --arena:#2a2340; --ring:#e0716a; --tower:#6f9be0;
+      --tank:#6f9be0; --healer:#4fae82; --dps:#e0716a;
+      --ok:#5fcf95; --ok-soft:rgba(95,207,149,.15); --ng:#f08a90; --ng-soft:rgba(240,138,144,.14);
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",system-ui,sans-serif;font-size:15px;line-height:1.7}
+  .wrap{max-width:820px;margin:0 auto;padding:20px 16px 56px;display:flex;flex-direction:column;gap:16px}
+  h1{font-size:clamp(22px,5.5vw,30px);margin:0;line-height:1.3}
+  .lede{margin:0;color:var(--soft);font-size:13.5px}
+  .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .bar .lbl{font-size:12px;color:var(--faint);font-weight:700;min-width:4.5em}
+  .chip{font:inherit;font-size:13px;font-weight:700;border:1px solid var(--line);background:var(--paper);color:var(--soft);border-radius:999px;padding:3px 12px;cursor:pointer}
+  .chip[aria-pressed="true"]{background:var(--violet);border-color:var(--violet);color:var(--paper)}
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px}
+  .head{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .tag{font-size:11.5px;font-weight:700;background:var(--violet-soft);color:var(--violet);padding:1px 9px;border-radius:999px}
+  .tag.me{background:var(--gold);color:var(--paper)}
+  .count{margin-left:auto;font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .q{font-size:18px;font-weight:700;margin:0}
+  .scene{margin:0;color:var(--soft);font-size:14px}
+  .timer{height:4px;background:var(--line);border-radius:4px;overflow:hidden}
+  .timer i{display:block;height:100%;background:var(--gold);width:100%}
+  .field{display:flex;justify-content:center}
+  .field svg{width:100%;max-width:460px;height:auto;touch-action:manipulation;user-select:none}
+  .opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
+  .opt{font:inherit;text-align:left;border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:10px;padding:9px 12px;cursor:pointer}
+  .opt:hover:not(:disabled){border-color:var(--violet);background:var(--violet-soft)}
+  .opt.ok{border-color:var(--ok);background:var(--ok-soft)} .opt.ng{border-color:var(--ng);background:var(--ng-soft)}
+  .fb{border-radius:10px;padding:10px 12px;font-size:14px}
+  .fb.ok{background:var(--ok-soft)} .fb.ng{background:var(--ng-soft)}
+  .fb b.v{display:block;font-size:15px} .fb.ok b.v{color:var(--ok)} .fb.ng b.v{color:var(--ng)}
+  .btn{font:inherit;font-weight:700;font-size:14px;border-radius:999px;padding:7px 20px;cursor:pointer;border:1px solid var(--violet);background:var(--violet);color:var(--paper)}
+  .btn.ghost{background:transparent;color:var(--violet)}
+  .actions{display:flex;gap:8px;flex-wrap:wrap}
+  .legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--soft)}
+  .legend i{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:-1px;margin-right:4px}
+  .score{font-size:40px;font-weight:700;line-height:1.1}
+  .misses{margin:0;padding-left:18px;font-size:13.5px;color:var(--soft)}
+  footer{font-size:12px;color:var(--faint);line-height:1.8}
+  /* SVG */
+  .arena{fill:var(--arena);stroke:var(--line);stroke-width:2}
+  .mk{font-size:15px;font-weight:700;text-anchor:middle;dominant-baseline:central}
+  .bossring{fill:none;stroke:var(--ring);stroke-width:3;opacity:.75}
+  .towerc{fill:var(--tower);fill-opacity:.16;stroke:var(--tower);stroke-width:2}
+  .click{cursor:crosshair}
+  /* クリック判定はsvg全体で取るので、飾りの図形がクリックを横取りしないようにする */
+  .mk,.towerc,.bossring,.overlay{pointer-events:none}
+  .pc text{font-size:11px;font-weight:700;text-anchor:middle;dominant-baseline:central;fill:#fff;pointer-events:none}
+  .pc .db{font-size:10px;fill:var(--ink);font-weight:700}
+  .target{fill:var(--ok);fill-opacity:.25;stroke:var(--ok);stroke-width:2;stroke-dasharray:4 3}
+  .mine{stroke:var(--ng);stroke-width:3}
+  .mine.good{stroke:var(--ok)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>ミッシング立ち位置練習</h1>
+    <p class="lede">絶・妖星乱舞 P2「ミッシング」。自分のロールと付いたデバフから、立つ位置をフィールド上でクリックして答えます。</p>
+  </header>
+
+  <div class="bar" role="group" aria-label="ロール"><span class="lbl">ロール</span><span id="roles"></span></div>
+  <div class="bar" role="group" aria-label="モード"><span class="lbl">モード</span>
+    <button class="chip" data-mode="random" aria-pressed="true">ランダム出題</button>
+    <button class="chip" data-mode="walk" aria-pressed="false">通し（①〜⑧）</button>
+    <button class="chip" data-mode="ref" aria-pressed="false">立ち位置一覧</button>
+  </div>
+  <div class="bar" role="group" aria-label="制限時間"><span class="lbl">制限時間</span>
+    <button class="chip" data-time="0" aria-pressed="true">なし</button>
+    <button class="chip" data-time="6" aria-pressed="false">6秒</button>
+    <button class="chip" data-time="4" aria-pressed="false">4秒</button>
+  </div>
+
+  <section class="card" id="stage" aria-live="polite"></section>
+
+  <footer>
+    基準は固定の勉強用スライド（P2「りーん準拠（KTDN）一部改」）です。図は塔が南に来る向きに揃えてあり、位置は目安です。食い違ったらスライドを優先してください。
+    各回のデバフの付き方はランダムで、実際の付与ルールは再現していません。
+  </footer>
+</div>
+
+<script>
+(() => {
+  // ---- 基本データ ----
+  // 座標はボス中心(0,0)、フィールド半径=1、下が南。スライド24・26の図から読み取った目安。
+  const POS = {
+    odd: {
+      headL:  [-0.25, 0.31], headR: [0.19, 0.17],
+      fan:    [-0.31, 0.46], circle:[0.33, 0.39],
+      idleT:  [-0.06, 0.42], idleH: [-0.34, 0.60],
+      idleD1: [0.14, 0.08],  idleD2:[0.22, 0.10]
+    },
+    even: {
+      fanL:   [-0.22, 0.13], fanR:  [0.23, 0.13],
+      circleL:[-0.24, 0.44], circleR:[0.24, 0.45],
+      idleT:  [-0.16,-0.28], idleM: [0.17,-0.29],
+      idleH:  [-0.63, 0.09], idleR: [0.61, 0.03]
+    },
+    past:   [0.00, 0.31],
+    future: [0.00,-0.45],
+    towers: [[-0.24, 0.30], [0.24, 0.30]]
+  };
+  // 正解とみなす半径。右塔の頭割りと無職DPSは重なって受けるので近接していてよい
+  const TOL = 0.10;
+
+  const ROLES = ["MT","ST","H1","H2","D1","D2","D3","D4"];
+  const PAIR = {MT:"ST",ST:"MT",H1:"H2",H2:"H1",D1:"D2",D2:"D1",D3:"D4",D4:"D3"};
+  const PAIR_FIRST = ["MT","H1","D1","D3"];   // 頭割りがいないときに先組になる側
+  const CAT = r => r[0]==="M"||r[0]==="S" ? "T" : r[0]==="H" ? "H" : (r==="D1"||r==="D2") ? "M" : "R";
+  // 塔の左右・同じデバフ同士の左右はこの優先順位（左から）。スライド26
+  const PRIO = {H:0,T:1,M:2,R:3};
+  const CAT_NAME = {T:"タンク",H:"ヒーラー",M:"近接",R:"遠隔"};
+  const ROLE_COLOR = r => CAT(r)==="T" ? "var(--tank)" : CAT(r)==="H" ? "var(--healer)" : "var(--dps)";
+  const DB = {head:"頭割り", fan:"扇", circle:"円", idle:"無職"};
+  const MARKS = "①②③④⑤⑥⑦⑧";
+  const GROUP_ROUNDS = {先:[1,2,3,8], 後:[4,5,6,7]};
+
+  const shuffle = a => { a=a.slice(); for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]];} return a; };
+  const pick = a => a[Math.random()*a.length|0];
+  const byPrio = (a,b) => PRIO[CAT(a)]-PRIO[CAT(b)] || ROLES.indexOf(a)-ROLES.indexOf(b);
+
+  // ---- 1回分の全員の位置を決める ----
+  // groups: {先:[4人], 後:[4人]}, debuffs: 塔組4人のデバフ
+  function layout(round, groups, debuffs){
+    const odd = round % 2 === 1;
+    const active = groups[GROUP_ROUNDS.先.includes(round) ? "先" : "後"];
+    const idle = ROLES.filter(r => !active.includes(r));
+    const out = {};
+    if(odd){
+      const heads = active.filter(r => debuffs[r]==="head").sort(byPrio);
+      heads.forEach((r,i) => out[r] = {pos:POS.odd[i===0?"headL":"headR"], db:"head",
+        why: i===0 ? "頭割り2人のうち優先順位が上なので左塔。左塔の頭割りは<b>円範囲のど真ん中</b>（きわはダメ）。"
+                   : "頭割り2人のうち優先順位が下なので右塔。右塔の頭割りは<b>タゲサの内側かつ塔の交点</b>。下がりすぎると隣の無職を巻き込む。"});
+      active.filter(r => debuffs[r]==="fan").forEach(r => out[r] = {pos:POS.odd.fan, db:"fan",
+        why:"奇数回の扇は左塔。<b>塔の中心から6〜7時</b>に立って南西へ扇を出す。"});
+      active.filter(r => debuffs[r]==="circle").forEach(r => out[r] = {pos:POS.odd.circle, db:"circle",
+        why:"奇数回の円は右塔。<b>頭割りの人の対角（5時方向・外周寄り）</b>。"});
+      const ds = idle.filter(r => r[0]==="D").sort(byPrio);
+      idle.forEach(r => {
+        const c = CAT(r);
+        if(c==="T") out[r] = {pos:POS.odd.idleT, db:"idle", why:"奇数回の無職タンクは左塔の頭割りに入る。<b>塔の中心より右下（4時）、南寄りのマックスメレー</b>。キックに巻き込まれないように。"};
+        else if(c==="H") out[r] = {pos:POS.odd.idleH, db:"idle", why:"奇数回の無職ヒーラーは<b>扇の人の後ろで扇誘導</b>。頭割りに巻き込まれないよう少し離れる。"};
+        else out[r] = {pos:POS.odd[r===ds[0]?"idleD1":"idleD2"], db:"idle", why:"奇数回の無職DPSは<b>右塔の頭割りに一緒に入る</b>（タゲサ内側寄り）。"};
+      });
+    }else{
+      ["fan","circle"].forEach(k => {
+        active.filter(r => debuffs[r]===k).sort(byPrio).forEach((r,i) => {
+          const side = i===0 ? "L" : "R";
+          out[r] = {pos:POS.even[k+side], db:k, why: (k==="fan"
+            ? "偶数回の扇は<b>ボスのタゲサの外と内線の中央</b>（左右同じ）。"
+            : "偶数回の円は<b>扇を出す人の対角、それより少し内側</b>。")
+            + `同じデバフの相手より優先順位が${i===0?"上なので左":"下なので右"}（ヒラ＞タンク＞近接＞遠隔）。`};
+        });
+      });
+      idle.forEach(r => {
+        const c = CAT(r);
+        const map = {T:["idleT","偶数回の無職タンクは<b>突進誘導</b>。塔の対角（左上）で、<b>ボスのタゲサは踏まない</b>（扇誘導しないため）。"],
+                     M:["idleM","偶数回の無職近接は<b>突進誘導</b>。塔の対角（右上）で、<b>ボスのタゲサは踏まない</b>。"],
+                     H:["idleH","偶数回の無職ヒーラーは<b>扇誘導</b>。西のマーカーより扇側に寄る（マーカーより奥に行かない）。"],
+                     R:["idleR","偶数回の無職遠隔は<b>扇誘導</b>。東のマーカーより扇側に寄る（マーカーより奥に行かない）。"]}[c];
+        out[r] = {pos:POS.even[map[0]], db:"idle", why:map[1]};
+      });
+    }
+    return out;
+  }
+
+  // 開幕のデバフと組分け。TH4人とDPS4人に「頭＋円円円」「頭＋扇扇扇」が1セットずつ付く（スライド23）
+  function opening(){
+    const thSet = Math.random()<.5 ? "fan" : "circle", dSet = thSet==="fan" ? "circle" : "fan";
+    const th = ROLES.slice(0,4), ds = ROLES.slice(4);
+    const deb = {};
+    const hTH = pick(th), hD = pick(ds);
+    th.forEach(r => deb[r] = r===hTH ? "head" : thSet);
+    ds.forEach(r => deb[r] = r===hD ? "head" : dSet);
+    const groups = {先:[], 後:[]};
+    PAIR_FIRST.forEach(a => {
+      const b = PAIR[a];
+      const first = deb[b]==="head" ? b : a;   // 頭割りの人が先組。いなければMT・H1・D1・D3側
+      groups.先.push(first); groups.後.push(first===a ? b : a);
+    });
+    return {deb, groups};
+  }
+
+  function roundDebuffs(round, groups, openDeb){
+    const active = groups[GROUP_ROUNDS.先.includes(round) ? "先" : "後"];
+    if(round===1){ const d={}; active.forEach(r => d[r]=openDeb[r]); return d; }
+    const set = shuffle(round%2 ? ["head","head","fan","circle"] : ["fan","fan","circle","circle"]);
+    const d = {}; active.forEach((r,i) => d[r]=set[i]); return d;
+  }
+
+  // ---- 描画 ----
+  const S = 210, R = 200;                       // viewBox中心と半径(px)
+  const X = p => (S + p[0]*R).toFixed(1), Y = p => (S + p[1]*R).toFixed(1);
+  function fieldSVG(inner, clickable){
+    const mk = [["A",0,-1,"#e25d5d"],["B",1,0,"#d4b23a"],["C",0,1,"#4fb3d6"],["D",-1,0,"#a874d6"]]
+      .map(([t,x,y,c]) => `<text class="mk" x="${S+x*R*0.88}" y="${S+y*R*0.88}" fill="${c}">${t}</text>`).join("");
+    const towers = POS.towers.map(t => `<circle class="towerc" cx="${X(t)}" cy="${Y(t)}" r="${0.17*R}"/>`).join("");
+    return `<svg viewBox="0 0 ${S*2} ${S*2}" role="img" aria-label="フィールド">
+      <circle class="arena ${clickable?"click":""}" cx="${S}" cy="${S}" r="${R}"/>
+      ${mk}${towers}
+      <circle class="bossring" cx="${S}" cy="${S}" r="${0.27*R}"/>
+      <text x="${S}" y="${S}" class="mk" fill="var(--faint)" style="font-size:12px">ボス</text>
+      <g class="overlay">${inner||""}</g></svg>`;
+  }
+  function pcSVG(r, p, db, me){
+    const short = {head:"頭",fan:"扇",circle:"円",idle:"無"}[db] || "";
+    return `<g class="pc">${me?`<circle cx="${X(p)}" cy="${Y(p)}" r="17" fill="none" stroke="var(--gold)" stroke-width="3"/>`:""}
+      <circle cx="${X(p)}" cy="${Y(p)}" r="12" fill="${ROLE_COLOR(r)}" stroke="var(--paper)" stroke-width="2"/>
+      <text x="${X(p)}" y="${Y(p)}">${r}</text>
+      <text class="db" x="${X(p)}" y="${(+Y(p)+21).toFixed(1)}">${short}</text></g>`;
+  }
+  const legend = `<div class="legend"><span><i style="background:var(--tank)"></i>タンク</span><span><i style="background:var(--healer)"></i>ヒーラー</span><span><i style="background:var(--dps)"></i>DPS</span><span><i style="border:3px solid var(--gold);width:10px;height:10px"></i>あなた</span><span>頭/扇/円＝デバフ　無＝無職</span></div>`;
+
+  // ---- 状態 ----
+  const stage = document.getElementById("stage");
+  let me = "ST", mode = "random", limit = 0;
+  try { me = localStorage.getItem("missing-role") || "ST"; } catch(e){}
+  let deck = [], idx = 0, score = 0, misses = [], answered = false, timerId = null;
+
+  // 出題を作る。kind: "pos"=位置クリック, "choice"=選択肢
+  function randomQuestion(){
+    const {deb, groups} = opening();
+    const round = 1 + (Math.random()*8|0);
+    const d = roundDebuffs(round, groups, deb);
+    const lay = layout(round, groups, d);
+    const mine = lay[me];
+    const grp = groups.先.includes(me) ? "先" : "後";
+    const scene = mine.db==="idle"
+      ? `あなた（${me}）は${grp}組。${MARKS[round-1]}回目は塔を踏まない回（無職）です。`
+      : `あなた（${me}）は${grp}組で、${MARKS[round-1]}回目の塔組。デバフは<b>${DB[mine.db]}</b>。`;
+    const others = Object.entries(d).filter(([r]) => r!==me).map(([r,v]) => `${r}:${DB[v]}`).join("　");
+    return {kind:"pos", tag:`${MARKS[round-1]} ${round%2?"奇数回":"偶数回"}`, scene, q:"どこに立つ？",
+      sub: `塔組のデバフ　${me in d ? "" : ""}${others}`, lay, answer:mine.pos, why:mine.why};
+  }
+
+  function walkthrough(){
+    const {deb, groups} = opening();
+    const list = [];
+    const myDeb = deb[me], pairDeb = deb[PAIR[me]];
+    const grp = groups.先.includes(me) ? "先" : "後";
+    const reason = myDeb==="head" ? "自分が頭割りなので先組。" : pairDeb==="head" ? "ペアに頭割りがいるので後組。"
+      : `頭割りがいないので優先度（MT・H1・D1・D3側が先）で${grp}組。`;
+    list.push({kind:"choice", tag:"組分け", scene:`開幕、あなた（${me}）に<b>${DB[myDeb]}</b>、ペアの${PAIR[me]}に<b>${DB[pairDeb]}</b>が付きました。`,
+      q:"あなたは先組？後組？", choices:["先組（①②③⑧）","後組（④⑤⑥⑦）"], answer: grp==="先"?"先組（①②③⑧）":"後組（④⑤⑥⑦）",
+      why: reason + `　先組: ${groups.先.join("・")}　後組: ${groups.後.join("・")}`});
+    for(let round=1; round<=8; round++){
+      if(round===3 || round===5 || round===7){
+        const past = Math.random()<.5;
+        list.push({kind:"pos", tag:"過去／未来", scene:`${MARKS[round-2]}回目の間にボスが<b>${past?"過去":"未来"}</b>を詠唱しました。8人で誘導します。`,
+          q:"どこに集合する？", answer: past?POS.past:POS.future, lay:null, groups,
+          why: past ? "<b>過去は塔と塔の間</b>に全員集合。向きが確定したら粘らず塔へ。" : "<b>未来は塔と塔の間の前（ボスの北側）</b>に全員集合。向きが確定したら粘らず塔へ。"});
+      }
+      const d = roundDebuffs(round, groups, deb);
+      const lay = layout(round, groups, d);
+      const mine = lay[me];
+      const others = Object.entries(d).filter(([r]) => r!==me).map(([r,v]) => `${r}:${DB[v]}`).join("　");
+      list.push({kind:"pos", tag:`${MARKS[round-1]} ${round%2?"奇数回":"偶数回"}`,
+        scene: mine.db==="idle" ? `${MARKS[round-1]}回目。あなたは無職です。` : `${MARKS[round-1]}回目。あなたは塔組で、デバフは<b>${DB[mine.db]}</b>。`,
+        q:"どこに立つ？", sub:`塔組のデバフ　${others}`, lay, answer:mine.pos, why:mine.why});
+    }
+    const fut = Math.random()<.5;
+    list.push({kind:"choice", tag:"⑧のあと", scene:`⑧のあと、A側で誘導。ボスの詠唱は<b>${fut?"未来":"過去"}</b>。`,
+      q:"どう動く？", choices:["C側へ","そのまま","B側へ"], answer: fut?"C側へ":"そのまま",
+      why:"A側で誘導したあと、<b>未来ならC側</b>、<b>過去ならそのまま</b>。"});
+    return list;
+  }
+
+  function start(){
+    clearTimeout(timerId);
+    idx = 0; score = 0; misses = [];
+    if(mode==="ref") return renderRef();
+    deck = mode==="walk" ? walkthrough() : Array.from({length:10}, randomQuestion);
+    render();
+  }
+
+  function render(){
+    answered = false;
+    if(idx >= deck.length) return renderResult();
+    const q = deck[idx];
+    stage.innerHTML = `
+      <div class="head"><span class="tag me">${me}</span><span class="tag">${q.tag}</span><span class="count">${idx+1} / ${deck.length}　正解 ${score}</span></div>
+      <p class="scene">${q.scene}</p>
+      <p class="q">${q.q}</p>
+      ${q.sub ? `<p class="scene" style="font-size:12.5px">${q.sub}</p>` : ""}
+      ${limit ? `<div class="timer"><i id="tbar"></i></div>` : ""}
+      ${q.kind==="pos" ? `<div class="field">${fieldSVG("", true)}</div>`
+        : `<div class="opts">${q.choices.map(c => `<button class="opt" data-v="${c}">${c}</button>`).join("")}</div>`}
+      <div id="fb"></div>`;
+    if(q.kind==="pos"){
+      const svg = stage.querySelector("svg");
+      svg.addEventListener("click", e => {
+        const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+        const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+        answerPos([(p.x-S)/R, (p.y-S)/R]);
+      });
+    }else{
+      stage.querySelectorAll(".opt").forEach(b => b.addEventListener("click", () => answerChoice(b.dataset.v, b)));
+    }
+    if(limit){
+      const bar = document.getElementById("tbar");
+      bar.style.transition = "none"; bar.style.width = "100%";
+      requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.transition = `width ${limit}s linear`; bar.style.width = "0%"; }));
+      timerId = setTimeout(() => { if(!answered){ q.kind==="pos" ? answerPos(null) : answerChoice(null, null); } }, limit*1000);
+    }
+  }
+
+  function finish(ok, q, extra){
+    answered = true; clearTimeout(timerId);
+    if(ok) score++; else misses.push(q);
+    const last = idx === deck.length-1;
+    document.getElementById("fb").innerHTML = `
+      <div class="fb ${ok?"ok":"ng"}"><b class="v">${ok?"正解":"不正解"}</b>${q.why}</div>
+      ${extra||""}
+      <div class="actions" style="margin-top:10px"><button class="btn" id="next">${last?"結果を見る":"次へ"}</button></div>`;
+    const nb = document.getElementById("next");
+    nb.addEventListener("click", () => { idx++; render(); });
+    nb.focus({preventScroll:true});
+  }
+
+  function answerPos(p){
+    if(answered) return;
+    const q = deck[idx];
+    const ok = !!p && Math.hypot(p[0]-q.answer[0], p[1]-q.answer[1]) <= TOL;
+    let g = `<circle class="target" cx="${X(q.answer)}" cy="${Y(q.answer)}" r="${TOL*R}"/>`;
+    if(q.lay) g += Object.entries(q.lay).map(([r,v]) => pcSVG(r, v.pos, v.db, r===me)).join("");
+    else g += pcSVG(me, q.answer, "", true);
+    if(p) g += `<g class="mine ${ok?"good":""}"><line x1="${+X(p)-7}" y1="${+Y(p)-7}" x2="${+X(p)+7}" y2="${+Y(p)+7}"/><line x1="${+X(p)-7}" y1="${+Y(p)+7}" x2="${+X(p)+7}" y2="${+Y(p)-7}"/></g>`;
+    stage.querySelector(".overlay").innerHTML = g;
+    stage.querySelector(".arena").classList.remove("click");
+    finish(ok, q, q.lay ? `<div style="margin-top:8px">${legend}</div>` : "");
+  }
+
+  function answerChoice(v, el){
+    if(answered) return;
+    const q = deck[idx], ok = v===q.answer;
+    stage.querySelectorAll(".opt").forEach(b => { b.disabled = true; if(b.dataset.v===q.answer) b.classList.add("ok"); });
+    if(el && !ok) el.classList.add("ng");
+    finish(ok, q);
+  }
+
+  function renderResult(){
+    stage.innerHTML = `
+      <span class="tag">結果</span>
+      <div class="score">${score}<small style="font-size:18px;color:var(--faint)"> / ${deck.length}</small></div>
+      ${misses.length ? `<ul class="misses">${misses.map(m => `<li><b>${m.tag}</b>：${m.why}</li>`).join("")}</ul>` : `<p class="scene">全問正解です。</p>`}
+      <div class="actions">${misses.length ? `<button class="btn" id="retry">間違えた問題だけ</button>` : ""}<button class="btn ${misses.length?"ghost":""}" id="again">もう一度</button></div>`;
+    const r = document.getElementById("retry");
+    if(r) r.addEventListener("click", () => { deck = misses.slice(); idx = 0; score = 0; misses = []; render(); });
+    document.getElementById("again").addEventListener("click", start);
+  }
+
+  // 一覧: 奇数回・偶数回の代表例を全員分表示する
+  function renderRef(){
+    const groups = {先:["H1","MT","D1","D3"], 後:["H2","ST","D2","D4"]};
+    const ex = {
+      odd: {round:1, d:{H1:"fan", MT:"head", D1:"head", D3:"circle"}},
+      even:{round:2, d:{H1:"fan", MT:"circle", D1:"fan", D3:"circle"}}
+    };
+    const block = (k, title, note) => {
+      const lay = layout(ex[k].round, groups, ex[k].d);
+      const pts = Object.entries(lay).map(([r,v]) => pcSVG(r, v.pos, v.db, r===me)).join("");
+      return `<div><p class="q">${title}</p><p class="scene">${note}</p><div class="field">${fieldSVG(pts,false)}</div></div>`;
+    };
+    stage.innerHTML = `
+      ${block("odd","奇数回（①③⑤⑦）","頭割りあり。例は先組（H1扇・MT頭・D1頭・D3円）が塔組。左塔：頭（優先上）・扇 ／ 右塔：頭（優先下）・円。無職はT左塔4時、H扇誘導、DPS右塔の頭割り。")}
+      ${block("even","偶数回（②④⑥⑧）","頭割りなし。扇2人は内側、円2人は外側で、同じデバフ同士は優先順位（ヒラ＞タンク＞近接＞遠隔）で左右。無職はT・近接が突進誘導（タゲサを踏まない）、H・遠隔が扇誘導。")}
+      <div><p class="q">過去／未来</p><div class="field">${fieldSVG(pcSVG("過",POS.past,"",false).replace(/fill="var\(--[a-z]+\)"/,'fill="var(--violet)"')+pcSVG("未",POS.future,"",false).replace(/fill="var\(--[a-z]+\)"/,'fill="var(--violet)"'),false)}</div>
+      <p class="scene">過去＝塔と塔の間、未来＝塔と塔の間の前（ボスの北側）。⑧のあとはA側で誘導し、未来ならC側、過去ならそのまま。</p></div>
+      ${legend}`;
+  }
+
+  // ---- UI ----
+  const rolesEl = document.getElementById("roles");
+  rolesEl.innerHTML = ROLES.map(r => `<button class="chip" data-role="${r}" aria-pressed="${r===me}">${r}</button>`).join(" ");
+  rolesEl.addEventListener("click", e => {
+    const b = e.target.closest("[data-role]"); if(!b) return;
+    me = b.dataset.role;
+    try { localStorage.setItem("missing-role", me); } catch(err){}
+    rolesEl.querySelectorAll("[data-role]").forEach(x => x.setAttribute("aria-pressed", String(x===b)));
+    start();
+  });
+  document.querySelectorAll("[data-mode]").forEach(b => b.addEventListener("click", () => {
+    document.querySelectorAll("[data-mode]").forEach(x => x.setAttribute("aria-pressed", String(x===b)));
+    mode = b.dataset.mode; start();
+  }));
+  document.querySelectorAll("[data-time]").forEach(b => b.addEventListener("click", () => {
+    document.querySelectorAll("[data-time]").forEach(x => x.setAttribute("aria-pressed", String(x===b)));
+    limit = +b.dataset.time; start();
+  }));
+  start();
+})();
+</script>
+</body>
+</html>
