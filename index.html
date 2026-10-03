@@ -96,6 +96,8 @@
   <footer>
     基準は固定の勉強用スライド（P2「りーん準拠（KTDN）一部改」）です。図は塔が南に来る向きに揃えてあり、位置は目安です。食い違ったらスライドを優先してください。
     各回のデバフの付き方はランダムで、実際の付与ルールは再現していません。
+    左右の決め方は、①④⑥は優先順位、③⑤⑦の頭割りと②の扇・円は前の回に踏んだ塔側（同じ側なら優先順位）、⑧はマーカーの数字（1が左）です。②と無職の位置の根拠は「仮説」と表示しています。
+    実際のマップでは塔は①から毎回45°ずつ、同じ向きに回ります（開始方位と回る向きは毎回違う）。塔を踏んだあと約3秒は、扇・円の人の頭上にマーカーが見えます。
     動きを見て覚えたいときは <a href="anim.html" style="color:var(--violet)">ミッシング立ち位置アニメ</a> へ。
   </footer>
 </div>
@@ -119,7 +121,9 @@
     },
     past:   [0.00, 0.31],
     future: [0.00,-0.45],
-    towers: [[-0.24, 0.30], [0.24, 0.30]]
+    towers: [[-0.24, 0.30], [0.24, 0.30]],
+    // 開幕の整列（先生共有の図）。ボスの南に2列、上が先組・下が後組、西から ヒラ・タンク・近接・遠隔
+    lineupX: [-0.49, -0.22, 0.11, 0.37], lineupY: {先:0.22, 後:0.47}
   };
   // 正解とみなす半径。右塔の頭割りと無職DPSは重なって受けるので近接していてよい
   const TOL = 0.10;
@@ -140,38 +144,96 @@
   const pick = a => a[Math.random()*a.length|0];
   const byPrio = (a,b) => PRIO[CAT(a)]-PRIO[CAT(b)] || ROLES.indexOf(a)-ROLES.indexOf(b);
 
+  // ---- 開幕〜⑧までの1周分を組み立てる ----
+  // 開幕: TH4人とDPS4人に「頭＋円円円」「頭＋扇扇扇」が1セットずつ付く（スライド23）。
+  // ①④は開幕のデバフ、それ以外は直前に踏んだ塔で付く。実際の付与ルールは未確認なのでランダム。
+  function buildScenario(){
+    const thSet = Math.random()<.5 ? "fan" : "circle", dSet = thSet==="fan" ? "circle" : "fan";
+    const th = ROLES.slice(0,4), ds = ROLES.slice(4);
+    const open = {};
+    const hTH = pick(th), hD = pick(ds);
+    th.forEach(r => open[r] = r===hTH ? "head" : thSet);
+    ds.forEach(r => open[r] = r===hD ? "head" : dSet);
+    const groups = {先:[], 後:[]};
+    PAIR_FIRST.forEach(a => {
+      const b = PAIR[a];
+      const first = open[b]==="head" ? b : a;   // 頭割りの人が先組。いなければMT・H1・D1・D3側
+      groups.先.push(first); groups.後.push(first===a ? b : a);
+    });
+    const deb = {};
+    const fill = (round, set) => { const g = groups[GROUP_ROUNDS.先.includes(round) ? "先" : "後"]; deb[round] = {}; shuffle(set).forEach((v,i) => deb[round][g[i]] = v); };
+    deb[1] = Object.fromEntries(groups.先.map(r => [r, open[r]]));
+    deb[4] = Object.fromEntries(groups.後.map(r => [r, open[r]]));
+    [2,6,8].forEach(n => fill(n, ["fan","fan","circle","circle"]));
+    [3,5,7].forEach(n => fill(n, ["head","head","fan","circle"]));
+    // ⑧のマーカー番号は、実際は先組がマクロを押した順。ここでは乱数
+    const num8 = {};
+    ["fan","circle"].forEach(k => shuffle(groups.先.filter(r => deb[8][r]===k)).forEach((r,i) => num8[r] = i+1));
+    // 塔の中心の向きは毎回同じ向きに45°ずつ回る。開始方位と回る向きは毎回ランダム（FFLogs 25ログで確認）
+    const tower = {start:(Math.random()*8|0)*45, dir:Math.random()<.5 ? 1 : -1};
+    const cast = {};
+    [2,4,6,8].forEach(n => cast[n] = Math.random()<.5 ? "past" : "future");
+    return {open, groups, deb, num8, tower, cast};
+  }
+
   // ---- 1回分の全員の位置を決める ----
-  // groups: {先:[4人], 後:[4人]}, debuffs: 塔組4人のデバフ
-  function layout(round, groups, debuffs){
-    const odd = round % 2 === 1;
-    const active = groups[GROUP_ROUNDS.先.includes(round) ? "先" : "後"];
+  // prevSide: 直前の回に各自が踏んだ塔側（"L"/"R"）。頭割りや②③⑤⑦の左右はこれで決まる
+  function layout(round, sc, prevSide){
+    const odd = round % 2 === 1, d = sc.deb[round];
+    const active = sc.groups[GROUP_ROUNDS.先.includes(round) ? "先" : "後"];
     const idle = ROLES.filter(r => !active.includes(r));
-    const out = {};
+    const out = {}, side = {}, info = {};
+    const sideTxt = rs => "前の回に踏んだ塔　" + rs.map(r => `${r}:${prevSide[r]==="L"?"左":"右"}`).join("　");
     if(odd){
-      const heads = active.filter(r => debuffs[r]==="head").sort(byPrio);
-      heads.forEach((r,i) => out[r] = {pos:POS.odd[i===0?"headL":"headR"], db:"head",
-        why: i===0 ? "頭割り2人のうち優先順位が上なので左塔。左塔の頭割りは<b>円範囲のど真ん中</b>（きわはダメ）。"
-                   : "頭割り2人のうち優先順位が下なので右塔。右塔の頭割りは<b>タゲサの内側かつ塔の交点</b>。下がりすぎると隣の無職を巻き込む。"});
-      active.filter(r => debuffs[r]==="fan").forEach(r => out[r] = {pos:POS.odd.fan, db:"fan",
-        why:"奇数回の扇は左塔。<b>塔の中心から6〜7時</b>に立って南西へ扇を出す。"});
-      active.filter(r => debuffs[r]==="circle").forEach(r => out[r] = {pos:POS.odd.circle, db:"circle",
-        why:"奇数回の円は右塔。<b>頭割りの人の対角（5時方向・外周寄り）</b>。"});
-      const ds = idle.filter(r => r[0]==="D").sort(byPrio);
+      // 頭割りの左右: ①は優先順位。③⑤⑦は前の回に自分が踏んだ塔側、2人が同じ側なら優先順位（仮説）
+      const heads = active.filter(r => d[r]==="head").sort(byPrio);
+      let L = heads[0], Rr = heads[1], basis = null;
+      if(round>1){
+        const s0 = prevSide[heads[0]], s1 = prevSide[heads[1]];
+        info[heads[0]] = info[heads[1]] = sideTxt(heads);
+        if(s0 && s1 && s0!==s1){ L = s0==="L" ? heads[0] : heads[1]; Rr = L===heads[0] ? heads[1] : heads[0]; basis = "前の回に自分が踏んだ塔側（仮説）"; }
+        else basis = "2人とも前の回は同じ塔側だったので優先順位（上が左。仮説）";
+      }
+      out[L]  = {pos:POS.odd.headL, db:"head", why:`左塔の頭割り（${basis || "優先順位が上なので左塔"}）。左塔の頭割りは<b>円範囲のど真ん中</b>（きわはダメ）。`};
+      out[Rr] = {pos:POS.odd.headR, db:"head", why:`右塔の頭割り（${basis || "優先順位が下なので右塔"}）。右塔の頭割りは<b>タゲサの内側かつ塔の交点</b>。下がりすぎると隣の無職を巻き込む。`};
+      side[L] = "L"; side[Rr] = "R";
+      active.filter(r => d[r]==="fan").forEach(r => { out[r] = {pos:POS.odd.fan, db:"fan",
+        why:"奇数回の扇は左塔。<b>塔の中心から6〜7時</b>に立って南西へ扇を出す。"}; side[r] = "L"; });
+      active.filter(r => d[r]==="circle").forEach(r => { out[r] = {pos:POS.odd.circle, db:"circle",
+        why:"奇数回の円は右塔。<b>頭割りの人の対角（5時方向・外周寄り）</b>。"}; side[r] = "R"; });
+      const dps = idle.filter(r => r[0]==="D").sort(byPrio);
       idle.forEach(r => {
         const c = CAT(r);
         if(c==="T") out[r] = {pos:POS.odd.idleT, db:"idle", why:"奇数回の無職タンクは左塔の頭割りに入る。<b>塔の中心より右下（4時）、南寄りのマックスメレー</b>。キックに巻き込まれないように。"};
         else if(c==="H") out[r] = {pos:POS.odd.idleH, db:"idle", why:"奇数回の無職ヒーラーは<b>扇の人の後ろで扇誘導</b>。頭割りに巻き込まれないよう少し離れる。"};
-        else out[r] = {pos:POS.odd[r===ds[0]?"idleD1":"idleD2"], db:"idle", why:"奇数回の無職DPSは<b>右塔の頭割りに一緒に入る</b>（タゲサ内側寄り）。"};
+        else out[r] = {pos:POS.odd[r===dps[0]?"idleD1":"idleD2"], db:"idle", why:"奇数回の無職DPSは<b>右塔の頭割りに一緒に入る</b>（タゲサ内側寄り）。"};
       });
     }else{
       ["fan","circle"].forEach(k => {
-        active.filter(r => debuffs[r]===k).sort(byPrio).forEach((r,i) => {
-          const side = i===0 ? "L" : "R";
-          out[r] = {pos:POS.even[k+side], db:k, why: (k==="fan"
-            ? "偶数回の扇は<b>ボスのタゲサの外と内線の中央</b>（左右同じ）。"
-            : "偶数回の円は<b>扇を出す人の対角、それより少し内側</b>。")
-            + `同じデバフの相手より優先順位が${i===0?"上なので左":"下なので右"}（ヒラ＞タンク＞近接＞遠隔）。`};
-        });
+        const ps = active.filter(r => d[r]===k).sort(byPrio);
+        let L = ps[0], Rr = ps[1], basis;
+        if(round===8){
+          L = ps.find(r => sc.num8[r]===1); Rr = ps.find(r => r!==L);
+          basis = "マーカーの数字で決まる（1が左・2が右）";
+          info[L] = info[Rr] = "⑧のマーカー番号　" + ps.map(r => `${r}:${sc.num8[r]}`).join("　");
+        }else if(round===4){
+          basis = "後組が初めて踏む回なので優先順位（ヒラ＞タンク＞近接＞遠隔、上が左）";
+        }else if(round===6){
+          // スライド30「発動後：左から優先順位で6回目を処理」。②の「前の回の塔側」とは別ルール
+          basis = "⑤の発動後に左から優先順位で処理（スライド30）";
+        }else{
+          // ②は他の人のマーカーが見えないため前の回の塔側、という仮説。②の根拠は未確認
+          const s0 = prevSide[ps[0]], s1 = prevSide[ps[1]];
+          info[ps[0]] = info[ps[1]] = sideTxt(ps);
+          if(s0 && s1 && s0!==s1){ L = s0==="L" ? ps[0] : ps[1]; Rr = L===ps[0] ? ps[1] : ps[0]; basis = "前の回に自分がいた塔側をそのまま処理（仮説）"; }
+          else basis = "前の回に2人とも同じ塔側だったので、被った分を優先順位で動かす（上が左。仮説）";
+        }
+        const base = k==="fan"
+          ? "偶数回の扇は<b>ボスのタゲサの外と内線の中央</b>（左右同じ）。"
+          : "偶数回の円は<b>扇を出す人の対角、それより少し内側</b>。";
+        out[L]  = {pos:POS.even[k+"L"], db:k, why:`${base}左塔側（${basis}）。`};
+        out[Rr] = {pos:POS.even[k+"R"], db:k, why:`${base}右塔側（${basis}）。`};
+        side[L] = "L"; side[Rr] = "R";
       });
       idle.forEach(r => {
         const c = CAT(r);
@@ -179,34 +241,24 @@
                      M:["idleM","偶数回の無職近接は<b>突進誘導</b>。塔の対角（右上）で、<b>ボスのタゲサは踏まない</b>。"],
                      H:["idleH","偶数回の無職ヒーラーは<b>扇誘導</b>。西のマーカーより扇側に寄る（マーカーより奥に行かない）。"],
                      R:["idleR","偶数回の無職遠隔は<b>扇誘導</b>。東のマーカーより扇側に寄る（マーカーより奥に行かない）。"]}[c];
-        out[r] = {pos:POS.even[map[0]], db:"idle", why:map[1]};
+        out[r] = {pos:POS.even[map[0]], db:"idle", why:map[1] + "無職の間は前の塔が手がかりにならないので、塔ではなくロールの優先順位で決まる（仮説）。"};
       });
     }
-    return out;
+    return {out, side, info, active};
   }
 
-  // 開幕のデバフと組分け。TH4人とDPS4人に「頭＋円円円」「頭＋扇扇扇」が1セットずつ付く（スライド23）
-  function opening(){
-    const thSet = Math.random()<.5 ? "fan" : "circle", dSet = thSet==="fan" ? "circle" : "fan";
-    const th = ROLES.slice(0,4), ds = ROLES.slice(4);
-    const deb = {};
-    const hTH = pick(th), hD = pick(ds);
-    th.forEach(r => deb[r] = r===hTH ? "head" : thSet);
-    ds.forEach(r => deb[r] = r===hD ? "head" : dSet);
-    const groups = {先:[], 後:[]};
-    PAIR_FIRST.forEach(a => {
-      const b = PAIR[a];
-      const first = deb[b]==="head" ? b : a;   // 頭割りの人が先組。いなければMT・H1・D1・D3側
-      groups.先.push(first); groups.後.push(first===a ? b : a);
-    });
-    return {deb, groups};
+  // 1〜round回目までを順に処理する。左右が「前の回に踏んだ塔側」で決まるので、途中の回も計算が要る
+  function layoutsUpTo(sc, round){
+    const all = {}; let prev = {};
+    for(let n=1; n<=round; n++){ all[n] = layout(n, sc, prev); prev = all[n].side; }
+    return all;
   }
 
-  function roundDebuffs(round, groups, openDeb){
-    const active = groups[GROUP_ROUNDS.先.includes(round) ? "先" : "後"];
-    if(round===1){ const d={}; active.forEach(r => d[r]=openDeb[r]); return d; }
-    const set = shuffle(round%2 ? ["head","head","fan","circle"] : ["fan","fan","circle","circle"]);
-    const d = {}; active.forEach((r,i) => d[r]=set[i]); return d;
+  // 実際のマップでの塔の方位。図は塔が南に来る向きに揃えてある
+  const COMPASS = {0:"東(B)",45:"南東",90:"南(C)",135:"南西",180:"西(D)",225:"北西",270:"北(A)",315:"北東"};
+  function bearingText(t, round){
+    const c = (t.start + t.dir*45*(round-1) + 720) % 360;
+    return `実際のマップでは塔は<b>${COMPASS[(c+315)%360]}</b>と<b>${COMPASS[(c+45)%360]}</b>（中心は${COMPASS[c]}向き）。図はこれが南に来るよう回してある。`;
   }
 
   // ---- 描画 ----
@@ -239,47 +291,54 @@
   let deck = [], idx = 0, score = 0, misses = [], answered = false, timerId = null;
 
   // 出題を作る。kind: "pos"=位置クリック, "choice"=選択肢
+  const othersTxt = (d, me) => Object.entries(d).filter(([r]) => r!==me).map(([r,v]) => `${r}:${DB[v]}`).join("　");
+  const subTxt = (d, mine, info) => `塔組のデバフ　${othersTxt(d, me)}` + (info ? `<br>${info}` : "");
+
   function randomQuestion(){
-    const {deb, groups} = opening();
+    const sc = buildScenario();
     const round = 1 + (Math.random()*8|0);
-    const d = roundDebuffs(round, groups, deb);
-    const lay = layout(round, groups, d);
-    const mine = lay[me];
-    const grp = groups.先.includes(me) ? "先" : "後";
+    const L = layoutsUpTo(sc, round)[round];
+    const mine = L.out[me];
+    const grp = sc.groups.先.includes(me) ? "先" : "後";
     const scene = mine.db==="idle"
       ? `あなた（${me}）は${grp}組。${MARKS[round-1]}回目は塔を踏まない回（無職）です。`
       : `あなた（${me}）は${grp}組で、${MARKS[round-1]}回目の塔組。デバフは<b>${DB[mine.db]}</b>。`;
-    const others = Object.entries(d).filter(([r]) => r!==me).map(([r,v]) => `${r}:${DB[v]}`).join("　");
     return {kind:"pos", tag:`${MARKS[round-1]} ${round%2?"奇数回":"偶数回"}`, scene, q:"どこに立つ？",
-      sub: `塔組のデバフ　${me in d ? "" : ""}${others}`, lay, answer:mine.pos, why:mine.why};
+      sub: subTxt(sc.deb[round], mine, L.info[me]), lay:L.out, answer:mine.pos, why:mine.why};
   }
 
   function walkthrough(){
-    const {deb, groups} = opening();
+    const sc = buildScenario(), {open, groups} = sc;
     const list = [];
-    const myDeb = deb[me], pairDeb = deb[PAIR[me]];
+    const myDeb = open[me], pairDeb = open[PAIR[me]];
     const grp = groups.先.includes(me) ? "先" : "後";
     const reason = myDeb==="head" ? "自分が頭割りなので先組。" : pairDeb==="head" ? "ペアに頭割りがいるので後組。"
       : `頭割りがいないので優先度（MT・H1・D1・D3側が先）で${grp}組。`;
     list.push({kind:"choice", tag:"組分け", scene:`開幕、あなた（${me}）に<b>${DB[myDeb]}</b>、ペアの${PAIR[me]}に<b>${DB[pairDeb]}</b>が付きました。`,
       q:"あなたは先組？後組？", choices:["先組（①②③⑧）","後組（④⑤⑥⑦）"], answer: grp==="先"?"先組（①②③⑧）":"後組（④⑤⑥⑦）",
       why: reason + `　先組: ${groups.先.join("・")}　後組: ${groups.後.join("・")}`});
+    // 整列は組分けのあと。上の列が先組、下の列が後組、西からH・T・近接・遠隔（先生共有の図）
+    const slot = {H:0,T:1,M:2,R:3}[CAT(me)];
+    const swapped = grp==="先" !== PAIR_FIRST.includes(me);
+    list.push({kind:"pos", tag:"整列", scene:`組分けが決まったので、ボスの南に2列で並び直します。上の列が先組、下の列が後組。西から ヒラ・タンク・近接・遠隔。あなたは${grp}組。`,
+      q:"どこに並ぶ？", answer:[POS.lineupX[slot], POS.lineupY[grp]], lay:null, groups,
+      why:`<b>${grp==="先"?"上":"下"}の列</b>の西から${slot+1}番目。${swapped ? "ペアと列を入れ替える。" : "列はそのまま。"}`});
+    let prev = {};
     for(let round=1; round<=8; round++){
       if(round===3 || round===5 || round===7){
-        const past = Math.random()<.5;
-        list.push({kind:"pos", tag:"過去／未来", scene:`${MARKS[round-2]}回目の間にボスが<b>${past?"過去":"未来"}</b>を詠唱しました。8人で誘導します。`,
+        const past = sc.cast[round-1]==="past";
+        list.push({kind:"pos", tag:"過去／未来", scene:`${MARKS[round-2]}回目の間にボスが<b>${past?"過去":"未来"}</b>を詠唱しました。次の塔の予兆はすでに見えています。8人で誘導します。`,
           q:"どこに集合する？", answer: past?POS.past:POS.future, lay:null, groups,
           why: past ? "<b>過去は塔と塔の間</b>に全員集合。向きが確定したら粘らず塔へ。" : "<b>未来は塔と塔の間の前（ボスの北側）</b>に全員集合。向きが確定したら粘らず塔へ。"});
       }
-      const d = roundDebuffs(round, groups, deb);
-      const lay = layout(round, groups, d);
-      const mine = lay[me];
-      const others = Object.entries(d).filter(([r]) => r!==me).map(([r,v]) => `${r}:${DB[v]}`).join("　");
+      const L = layout(round, sc, prev); prev = L.side;
+      const mine = L.out[me];
       list.push({kind:"pos", tag:`${MARKS[round-1]} ${round%2?"奇数回":"偶数回"}`,
-        scene: mine.db==="idle" ? `${MARKS[round-1]}回目。あなたは無職です。` : `${MARKS[round-1]}回目。あなたは塔組で、デバフは<b>${DB[mine.db]}</b>。`,
-        q:"どこに立つ？", sub:`塔組のデバフ　${others}`, lay, answer:mine.pos, why:mine.why});
+        scene: (mine.db==="idle" ? `${MARKS[round-1]}回目。あなたは無職です。` : `${MARKS[round-1]}回目。あなたは塔組で、デバフは<b>${DB[mine.db]}</b>。`)
+          + `<br><span style="font-size:12.5px">${bearingText(sc.tower, round)}</span>`,
+        q:"どこに立つ？", sub: subTxt(sc.deb[round], mine, L.info[me]), lay:L.out, answer:mine.pos, why:mine.why});
     }
-    const fut = Math.random()<.5;
+    const fut = sc.cast[8]==="future";
     list.push({kind:"choice", tag:"⑧のあと", scene:`⑧のあと、A側で誘導。ボスの詠唱は<b>${fut?"未来":"過去"}</b>。`,
       q:"どう動く？", choices:["C側へ","そのまま","B側へ"], answer: fut?"C側へ":"そのまま",
       why:"A側で誘導したあと、<b>未来ならC側</b>、<b>過去ならそのまま</b>。"});
@@ -375,16 +434,18 @@
     const groups = {先:["H1","MT","D1","D3"], 後:["H2","ST","D2","D4"]};
     const ex = {
       odd: {round:1, d:{H1:"fan", MT:"head", D1:"head", D3:"circle"}},
-      even:{round:2, d:{H1:"fan", MT:"circle", D1:"fan", D3:"circle"}}
+      even:{round:4, d:{H2:"fan", ST:"circle", D2:"fan", D4:"circle"}}
     };
     const block = (k, title, note) => {
-      const lay = layout(ex[k].round, groups, ex[k].d);
+      // 一覧は左右を優先順位で決める回（①と④）の例にして、前の回の塔側を要らなくする
+      const sc = {groups, deb:{[ex[k].round]:ex[k].d}, num8:{}};
+      const lay = layout(ex[k].round, sc, {}).out;
       const pts = Object.entries(lay).map(([r,v]) => pcSVG(r, v.pos, v.db, r===me)).join("");
       return `<div><p class="q">${title}</p><p class="scene">${note}</p><div class="field">${fieldSVG(pts,false)}</div></div>`;
     };
     stage.innerHTML = `
-      ${block("odd","奇数回（①③⑤⑦）","頭割りあり。例は先組（H1扇・MT頭・D1頭・D3円）が塔組。左塔：頭（優先上）・扇 ／ 右塔：頭（優先下）・円。無職はT左塔4時、H扇誘導、DPS右塔の頭割り。")}
-      ${block("even","偶数回（②④⑥⑧）","頭割りなし。扇2人は内側、円2人は外側で、同じデバフ同士は優先順位（ヒラ＞タンク＞近接＞遠隔）で左右。無職はT・近接が突進誘導（タゲサを踏まない）、H・遠隔が扇誘導。")}
+      ${block("odd","奇数回（①③⑤⑦）","頭割りあり。左右は①が優先順位、③⑤⑦は前の回に踏んだ塔側。例は先組（H1扇・MT頭・D1頭・D3円）が塔組。左塔：頭（優先上）・扇 ／ 右塔：頭（優先下）・円。無職はT左塔4時、H扇誘導、DPS右塔の頭割り。")}
+      ${block("even","偶数回（②④⑥⑧）","頭割りなし。例は④の後組（H2扇・ST円・D2扇・D4円）。扇2人は内側、円2人は外側。同じデバフ同士の左右は、④⑥が優先順位（ヒラ＞タンク＞近接＞遠隔）、②は前の回の塔側（仮説）、⑧はマーカーの数字（1が左）。無職はT・近接が突進誘導（タゲサを踏まない）、H・遠隔が扇誘導。")}
       <div><p class="q">過去／未来</p><div class="field">${fieldSVG(pcSVG("過",POS.past,"",false).replace(/fill="var\(--[a-z]+\)"/,'fill="var(--violet)"')+pcSVG("未",POS.future,"",false).replace(/fill="var\(--[a-z]+\)"/,'fill="var(--violet)"'),false)}</div>
       <p class="scene">過去＝塔と塔の間、未来＝塔と塔の間の前（ボスの北側）。⑧のあとはA側で誘導し、未来ならC側、過去ならそのまま。</p></div>
       ${legend}`;
