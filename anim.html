@@ -146,11 +146,11 @@
       <li>⑧のあとの「A側で誘導」の正確な位置と、未来のときに移るC側の位置。図の位置は目安です。</li>
       <li>実時間モードの時刻のうち、整列・組分けと「塔に着く時刻（発動の1秒前）」は仮置きです。発動・過去未来の詠唱・塔の出現は FFLogs の1ログ（HtBjmNGTyVnXpPDZ #4）の敵詠唱から取りました。1ログ分なので、ばらつきは確認していません。</li>
     </ul>
-    <p style="margin:6px 0 0">スライドから読んだ解釈: ③⑤⑦の頭割りは「前の回に自分が踏んだ塔側」（スライド24の例外）。2人が同じ塔側だったときは優先順位（スライド28「頭→優先度準拠」）。②⑥の扇・円も前の回の塔側が基本で、被ったら優先順位で動く（スライド26）。④と⑥は優先順位（⑥はスライド30）、⑧はマーカーの数字（1が左・2が右、スライド28）。</p>
+    <p style="margin:6px 0 0">スライドから読んだ解釈: ③⑤⑦の頭割りは「前の回に自分が踏んだ塔側」（スライド25の例外）。2人が同じ塔側だったときは優先順位（スライド29「頭→優先度準拠」）。②⑥の扇・円も前の回の塔側が基本で、被ったら優先順位で動く（スライド27）。④と⑥は優先順位（⑥はスライド31）、⑧はマーカーの数字（1が左・2が右、スライド29）。</p>
   </section>
 
   <footer>
-    基準は固定の勉強用スライド（P2「りーん準拠（KTDN）一部改」、スライド21〜31）。位置は図から読んだ目安で、食い違ったらスライドを優先してください。
+    基準は固定の勉強用スライド（P2「りーん準拠（KTDN）一部改」、スライド22〜32）。位置は図から読んだ目安で、食い違ったらスライドを優先してください。
     クリックで答える練習は <a href="https://poultice.github.io/missing_sim/" style="color:var(--violet)">ミッシング立ち位置練習</a> へ。
   </footer>
 </div>
@@ -175,7 +175,7 @@
   const PAIR = {MT:"ST",ST:"MT",H1:"H2",H2:"H1",D1:"D2",D2:"D1",D3:"D4",D4:"D3"};
   const PAIR_FIRST = ["MT","H1","D1","D3"];
   const CAT = r => r[0]==="M"||r[0]==="S" ? "T" : r[0]==="H" ? "H" : (r==="D1"||r==="D2") ? "M" : "R";
-  const PRIO = {H:0,T:1,M:2,R:3};   // 左から ヒラ＞タンク＞近接＞遠隔（スライド26）
+  const PRIO = {H:0,T:1,M:2,R:3};   // 左から ヒラ＞タンク＞近接＞遠隔（スライド27）
   const ROLE_COLOR = r => CAT(r)==="T" ? "var(--tank)" : CAT(r)==="H" ? "var(--healer)" : "var(--dps)";
   const DB = {head:"頭割り", fan:"扇", circle:"円", idle:"無職"};
   const DB_COLOR = {head:"var(--stack)", fan:"var(--fan)", circle:"var(--circle)"};
@@ -193,7 +193,7 @@
     const pick = a => a[R()*a.length|0];
     const shuffle = a => { a=a.slice(); for(let i=a.length-1;i>0;i--){const j=R()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]];} return a; };
 
-    // 開幕: TH4人とDPS4人に「頭＋円円円」「頭＋扇扇扇」が1セットずつ（スライド23）
+    // 開幕: TH4人とDPS4人に「頭＋円円円」「頭＋扇扇扇」が1セットずつ（スライド24）
     const th = ROLES.slice(0,4), ds = ROLES.slice(4);
     const mineIn = g => force && g.includes(force.role);
     let thSet = R()<.5 ? "fan" : "circle";
@@ -259,8 +259,8 @@
           L = ps.find(r => sc.num8[r]===1); Rr = ps.find(r => r!==L);
           basis = `マーカーの数字で決まる（1が左・2が右）`;
         }else if(round===4 || round===6){
-          // ⑥はスライド30「発動後：左から優先順位で6回目を処理」。②の「前の回の塔側」とは別ルール
-          [L, Rr] = ps; basis = round===4 ? "後組が初めて踏む回なので優先順位（ヒラ＞タンク＞近接＞遠隔、上が左）" : "⑤の発動後に左から優先順位で処理（スライド30）";
+          // ⑥はスライド31「発動後：左から優先順位で6回目を処理」。②の「前の回の塔側」とは別ルール
+          [L, Rr] = ps; basis = round===4 ? "後組が初めて踏む回なので優先順位（ヒラ＞タンク＞近接＞遠隔、上が左）" : "⑤の発動後に左から優先順位で処理（スライド31）";
         }else{
           const s0 = prevSide[ps[0]], s1 = prevSide[ps[1]];
           if(s0 && s1 && s0!==s1){ L = s0==="L" ? ps[0] : ps[1]; Rr = L===ps[0] ? ps[1] : ps[0]; basis = round===2 ? "前の回に自分がいた塔側をそのまま処理（②は全員のマーカーがまだ見えないため、という仮説）" : "前の回に自分がいた塔側をそのまま処理"; }
@@ -541,7 +541,7 @@
     if(playing) t = st.t0 + (performance.now()-showTs)/1000;
     document.getElementById("clock").textContent = (t>=0?"+":"−") + Math.abs(t).toFixed(1) + " 秒";
   }, 100);
-  const WHY_IDLE = "無職の間は前に踏んだ塔が手がかりにならないので、塔ではなくロールの優先順位で位置が決まる（スライド29、仮説）。";
+  const WHY_IDLE = "無職の間は前に踏んだ塔が手がかりにならないので、塔ではなくロールの優先順位で位置が決まる（スライド30、仮説）。";
   function renderText(st){
     document.getElementById("eyebrow").textContent = `コマ ${idx+1} / ${steps.length}　${fmtT(st.t1)}`;
     document.getElementById("stitle").textContent = st.title;
