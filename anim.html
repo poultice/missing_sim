@@ -165,7 +165,7 @@
            idleT:[-0.16,-0.28], idleM:[0.17,-0.29], idleH:[-0.63,0.09], idleR:[0.61,0.03] },
     past:[0.00,0.31], future:[0.00,-0.45],
     towers:[[-0.24,0.30],[0.24,0.30]],
-    // 開幕の整列は先生共有の図（2026-10-03）: ボスの南に2列、上が先組・下が後組、西から H・T・近接・遠隔
+    // 開幕の整列は共有された図（2026-10-03）: ボスの南に2列、上が先組・下が後組、西から H・T・近接・遠隔
     lineupX:[-0.49,-0.22,0.11,0.37], lineupY:{先:0.22, 後:0.47},
     // 以下はスライドに位置が無い（未決）。図を描くための仮置き
     aSide:[0,-0.62], cSide:[0,0.62]
@@ -324,7 +324,7 @@
       steps.push({key:MARKS[round-1], title:`${MARKS[round-1]} ${odd?"奇数回":"偶数回"}：移動`, desc, bear, pos, marks, who, towers:true, fx:[], round, rot:roundRot(sc.tower, round),
         cast: !odd ? {name:`${CAST[sc.cast[round]]}の終焉`, from:.35, to:1} : null});
       steps.push({key:`${MARKS[round-1]}発`, title:`${MARKS[round-1]} 発動`, desc:"塔・デバフ・誘導の範囲が出る。処理したら元の塔に帰る。", bear, pos, marks, who, towers:true, fx:fxFor(round, L.out, L.active, sc), round, rot:roundRot(sc.tower, round)});
-      // 塔を踏んだ後およそ3秒間、扇・円の人の頭上にマーカーが出る（先生の情報）。次の過去/未来の詠唱は踏んだ直後から始まる
+      // 塔を踏んだ後およそ3秒間、扇・円の人の頭上にマーカーが出る（共有された情報）。次の過去/未来の詠唱は踏んだ直後から始まる
       const after = {}; ROLES.forEach(r => { const m = (marks[r]||"").replace(/\d/,""); if(m==="fan"||m==="circle") after[r] = m; });
       steps.push({key:`${MARKS[round-1]}頭上`, title:`${MARKS[round-1]} 着弾後：頭上マーカー`, desc:"塔を踏んだ後、およそ3秒間、扇・円が付いた人の頭上にマーカーが見える。ここで誰がどちらかを確認して、次の誘導や被りに備える。",
         bear, pos, marks:after, who:Object.fromEntries(ROLES.map(r=>[r,{db:after[r]||"",why:after[r] ? `頭上に<b>${DB[after[r]]}</b>のマーカーが約3秒見える。` : (L.active.includes(r) ? "頭割りの人は塔を踏んだあとマーカーなし。" : "無職のためマーカーなし。")}])),
